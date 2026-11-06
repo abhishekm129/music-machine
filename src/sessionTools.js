@@ -1,3 +1,13 @@
+export function matchingSessions(sessions, anchor) {
+  if (!anchor) return [];
+  return sessions.filter(s => s.target === anchor.target && s.bpm === anchor.bpm)
+    .sort((a,b) => b.id - a.id);
+}
+
+export function previousSession(sessions, current) {
+  return matchingSessions(sessions, current).find(s => s.id < current.id) ?? null;
+}
+
 export function filterSessions(sessions, query = '', target = '', order = 'newest') {
   const search = query.trim().toLowerCase();
   const filtered = sessions.filter(session =>

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { filterSessions, sessionsCsv } from '../src/sessionTools.js';
+import { filterSessions, sessionsCsv, matchingSessions, previousSession } from '../src/sessionTools.js';
 import { signalStats } from '../src/audio.js';
 
 const session = (id, name, target, score) => ({ id, name, target, bpm:100, created:'2026-11-05', duration:3,
@@ -25,4 +25,11 @@ test('recording level separates silence and clipping', () => {
   assert.equal(signalStats(new Uint8Array([128,128])).rms,0);
   assert.equal(signalStats(new Uint8Array([0,255])).peak,1);
   assert.ok(signalStats(new Uint8Array([100,156])).rms>.2);
+});
+test('progress compares the same note and tempo and never a future session', () => {
+  const history = [...sessions, {...session(4,'Faster notes',69,99),bpm:120}];
+  assert.deepEqual(matchingSessions(history,sessions[2]).map(s=>s.id),[3,1]);
+  assert.equal(previousSession(history,sessions[2]).id,1);
+  assert.equal(previousSession(history,sessions[0]),null);
+  assert.deepEqual(matchingSessions(history,null),[]);
 });
