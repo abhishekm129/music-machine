@@ -1,0 +1,60 @@
+import { after, test } from 'node:test';
+import assert from 'node:assert/strict';
+import React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { createServer } from 'vite';
+
+const server = await createServer({configFile:false,server:{middlewareMode:true,hmr:false,watch:null},appType:'custom'});
+after(()=>server.close());
+const {default:Workbench} = await server.ssrLoadModule('/src/Workbench.jsx');
+const noop = ()=>{};
+const base = {
+  view:'studio',sessions:[],target:69,bpm:100,name:'',seconds:0,level:0,
+  visibleSessions:[],practiceGroups:[],progressSessions:[],recurring:[],
+  search:'',historyTarget:'',sortOrder:'newest',fileInput:{current:null},
+  PitchChart:()=>React.createElement('div',null,'Pitch visualization'),
+  Spectrum:()=>React.createElement('div',null,'Spectrum visualization'),
+  setView:noop,setError:noop,setTarget:noop,setBpm:noop,setName:noop,setMetro:noop,
+  stopRecording:noop,startRecording:noop,upload:noop,runAnalysis:noop,playReference:noop,
+  remove:noop,setTab:noop,setSearch:noop,setHistoryTarget:noop,setSortOrder:noop,
+  exportHistory:noop,setProgressGroup:noop,openSession:noop,tab:'pitch'
+};
+const render = props=>renderToStaticMarkup(React.createElement(Workbench,{...base,...props}));
+const result = {id:1,name:'Long tones',target:69,bpm:100,created:'2026-11-05',duration:3,
+  metrics:{accuracy:95,timing:null,stability:90,spread:5,medianHz:440,deviation:0,voicedPercent:90},
+  feedback:[{kind:'tuning',title:'Centered tuning',detail:'Keep a steady tone.'}]};
+
+test('empty studio explains the next action and exposes accessible controls',()=>{
+  const html=render();
+  assert.ok(html.includes('Nothing to measure')||html.includes('NOTHING TO MEASURE'));
+  assert.ok(html.includes('Record an exercise'));
+  assert.ok(html.includes('aria-label="Decrease tempo"'));
+  assert.ok(html.includes('aria-label="Sound study view"'));
+  assert.ok(html.includes('aria-pressed="true"'));
+});
+test('recording state offers stop control and measured input level',()=>{
+  const html=render({recording:true,seconds:12,level:.5,signal:'clipping'});
+  assert.ok(html.includes('Stop recording'));
+  assert.ok(html.includes('aria-valuenow="50"'));
+  assert.ok(html.includes('signal is clipping'));
+});
+test('analysis results render feedback without inventing a timing score',()=>{
+  const html=render({result});
+  assert.ok(html.includes('Pitch visualization'));
+  assert.ok(html.includes('Centered tuning'));
+  assert.ok(html.includes('Separate your notes'));
+  assert.ok(html.includes('440 Hz'));
+});
+test('loading state announces work and disables record and analysis actions',()=>{
+  const html=render({busy:true,activity:'Analyzing practice'});
+  assert.ok(html.includes('Analyzing practice. Your measurements will appear when ready.'));
+  assert.match(html, /class="record-button [^"]*" disabled/);
+  assert.match(html, /class="button primary analyze-button" disabled/);
+  assert.ok(html.includes('aria-busy="true"'));
+});
+test('journal has intentional empty and filtered states',()=>{
+  assert.ok(render({view:'history'}).includes('Your first page is still unwritten'));
+  const html=render({view:'history',sessions:[result],progressAnchor:result,practiceGroups:[['69:100',result]],progressSessions:[result]});
+  assert.ok(html.includes('No sessions under this name or note'));
+  assert.ok(html.includes('Clear filters'));
+});
