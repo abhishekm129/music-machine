@@ -70,7 +70,7 @@ def analyze(samples, rate, target=69, bpm=100, exercise=None):
                        'cents': round(cents, 1) if cents is not None else None,
                        'level': round(float(energies[i]), 4)})
     if len(pitches) < 3:
-        raise ValueError('No steady musical pitch detected. Try a clear sustained single note with a stronger recording level.')
+        raise ValueError('No reliable musical pitch detected. Try a stronger recording level and clear notes in a quiet room.')
     # Energy rises identify attacks. Suppress adjacent detections for 140 ms.
     onset_hop = 160
     short = samples[:len(samples) // onset_hop * onset_hop].reshape(-1, onset_hop)

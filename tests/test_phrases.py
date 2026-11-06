@@ -1,6 +1,8 @@
 import io
 import json
 import unittest
+import tempfile
+from pathlib import Path
 import numpy as np
 from analysis import analyze
 from phrases import build_exercise
@@ -22,6 +24,33 @@ def phrase_audio(notes, bpm=100, gap=.10):
 
 
 class PhraseTests(unittest.TestCase):
+    def test_detuned_notes_and_slow_performance(self):
+        exercise = build_exercise({'id':'arpeggio'},60,100)
+        notes = [(n['midi']+.35,n['beats']) for n in exercise['notes']]
+        result = analyze(phrase_audio(notes),16000,60,100,exercise)
+        self.assertEqual(result['sequence']['correct'],7)
+        self.assertEqual(result['metrics']['accuracy'],0)
+        self.assertGreater(result['metrics']['deviation'],25)
+        slow = analyze(phrase_audio([(n['midi'],n['beats']) for n in exercise['notes']],bpm=80),16000,60,100,exercise)
+        self.assertGreater(slow['metrics']['timingMs'],200)
+
+    def test_api_persists_exercise_and_note_results(self):
+        exercise = build_exercise({'id':'arpeggio'},60,100)
+        original = app.config['DATABASE']
+        try:
+            with tempfile.TemporaryDirectory() as folder:
+                app.config['DATABASE'] = Path(folder)/'practice.db'
+                with app.test_client() as client:
+                    signal = phrase_audio([(n['midi'],n['beats']) for n in exercise['notes']])
+                    response = client.post('/api/analyze',data={'audio':(io.BytesIO(wav_bytes(signal)),'arpeggio.wav'), 'target':'60','bpm':'100','exercise':json.dumps({'id':'arpeggio'})})
+                    self.assertEqual(response.status_code,200)
+                    self.assertEqual(response.json['sequence']['correct'],7)
+                    saved = client.get('/api/sessions').json[0]
+                    self.assertEqual(saved['exercise']['signature'],exercise['signature'])
+                    self.assertEqual(len(saved['sequence']['notes']),7)
+        finally:
+            app.config['DATABASE'] = original
+
     def test_connected_scale(self):
         exercise = build_exercise({'id':'major_scale'},60,100)
         result = analyze(phrase_audio([(n['midi'],n['beats']) for n in exercise['notes']],gap=0),16000,60,100,exercise)

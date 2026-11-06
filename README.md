@@ -1,6 +1,6 @@
 # Music Machine
 
-A React and Flask music practice analyzer for monophonic recordings. Measures tuning, note stability and onset alignment to a selected tempo. SQLite stores sessions on this computer.
+A React and Flask music practice analyzer for scales, short melodies, and single-note exercises. Tracks one melodic voice, compares it with an expected phrase, and measures tuning, note stability and rhythmic timing. SQLite stores sessions on this computer.
 
 ## Run locally
 
@@ -22,15 +22,29 @@ Start the API and frontend in separate terminals:
 npm run dev
 ```
 
-Open http://127.0.0.1:5173. Record with a microphone, upload a PCM WAV, or analyze the generated demo. Select a target note and tempo before analyzing. For best results play one note at a time in a quiet room. Chords, percussion and noisy recordings are not supported for pitch scoring.
+Open http://127.0.0.1:5173. Choose an exercise and tempo, then record with a microphone, upload audio, or analyze the generated demo. The default exercise is a major scale. Connected notes are supported: you do not need silence between different notes. Clear attacks help distinguish repeated notes at the same pitch. Chords, simultaneous melodic parts, percussion, and very noisy recordings are not supported.
+
+## Scales and melodies
+
+- Choose a major scale, natural minor scale, major arpeggio, or either short melody; the root note transposes the exercise.
+- Select **Write a short melody** for your own phrase. Enter scientific pitch names, such as `C4 D4 E4:2 D4 C4:2`. `C4` is middle C, `F#4` and `Bb3` are supported, and `:2` means two beats. Notes without a length last one beat. Custom pitches are absolute; the root selector is disabled in this mode.
+- Melodies may contain 2–32 notes from C2 to C6, up to 64 beats and 115 seconds. Allowed lengths are 0.5, 1, 1.5, 2, 3, and 4 beats. Rests are not supported in this version. Each note must last at least 0.18 seconds; slower tempos work best.
+- Use **Hear exercise** to listen to the whole phrase before recording. **Open a demo exercise** generates and analyzes that exercise.
+- The pitch chart overlays your detected pitch with dashed expected notes. The note table identifies notes that are in tune, out of tune, wrong, or not detected, and lists extras. A note that was played quietly or unclearly may be marked not detected.
+- Phrase pitch accuracy is the percentage of expected notes within ±25 cents, divided by the larger of expected and detected note counts so extra notes reduce the score. The summary's notes-found count measures correct note identities, including notes needing a tuning adjustment. Stability measures variation *within* notes, not deliberate melodic pitch changes.
+- Timing compares aligned note starts with the written beat lengths, anchored to the first matched note. It does not measure your start against an external metronome. Signed timing in the table means early (negative) or late (positive).
+
+Single-note mode remains available for sustained tones or repeated notes at one pitch.
 
 During recording, level guidance helps you avoid a weak or clipped signal. The reference tone and metronome stop before microphone recording begins; use headphones when practicing with external reference audio.
 
-Session history includes name search, target-note filtering, date/score sorting, and CSV export of the displayed sessions. The app loads the most recent 100 sessions. Audio is not included in exports. Progress charts compare pitch accuracy within the same target-note and tempo group; individual results compare each metric with the previous session in that group. A missing timing measurement is never treated as zero.
+Session history includes name search, root-note filtering, date/score sorting, and CSV export of the displayed sessions. The app loads the most recent 100 sessions. Audio is not included in exports. Progress charts compare only identical exercise notes and durations at the same root and tempo. Old single-note sessions remain separate from scales and melodies. CSV summaries include exercise names and note counts. A missing timing measurement is never treated as zero.
 
 ## Analysis
 
 The API uses windowed FFT autocorrelation for fundamental estimation, normalized correlation to reject unvoiced frames, parabolic peak interpolation, and a Hann-windowed Fourier spectrum. Pitch error is measured in cents against the chosen note; stability is the standard deviation of voiced pitch. Energy rises estimate note onsets, compared with the nearest beat after the first detected onset. Timing is relative to that first onset, not an externally synchronized metronome. Scores are practice heuristics, not calibrated musical assessments.
+
+For phrases, median-smoothed pitch frames and energy attacks are segmented into note events. Very short transitions are discarded. Dynamic-programming sequence alignment associates events with expected notes while allowing insertions, omissions, and substitutions. Tuning is measured against each note's reference; stability excludes frames at note edges. The shared `exercises.json` catalog supplies both the UI and backend; the backend validates all submitted exercises. This is a lightweight signal-processing approach, so pitch slides, heavy vibrato, overlapping sustain, and very fast ornaments can produce segmentation errors.
 
 Recordings stay in memory and are not saved. Only analysis summaries are stored in `practice.db`. The app is intended for local use and has no account system. Typography uses local serif, sans-serif, and monospace font stacks without external font requests.
 

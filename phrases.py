@@ -39,6 +39,8 @@ def build_exercise(spec, root, bpm):
         validated.append({'midi': midi, 'beats': beats, 'name': note_name(midi)})
     if sum(n['beats'] for n in validated) > 64 or sum(n['beats'] for n in validated) * 60 / bpm > 115:
         raise ValueError('Keep the melody within 64 beats and 115 seconds.')
+    if min(n['beats'] for n in validated) * 60 / bpm < .18:
+        raise ValueError('Choose a slower tempo for short notes. Each note needs at least 0.18 seconds for pitch analysis.')
     signature = ':'.join(f"{n['midi']}/{n['beats']:g}" for n in validated)
     return {'id': exercise_id, 'name': name, 'notes': validated, 'signature': signature}
 
@@ -76,7 +78,9 @@ def segment_notes(points, onsets):
                 continue
             nearby = [t for t in onsets if abs(t-left) <= .10]
             onset = min(nearby, key=lambda t: abs(t-left)) if nearby else left
-            frequencies = np.array([p['hz'] for p in chunk])
+            # Exclude frame windows that straddle the neighboring note.
+            interior = chunk[2:-2] if len(chunk) >= 8 else chunk[1:-1]
+            frequencies = np.array([p['hz'] for p in interior])
             midi = group[0]['midi']
             cents = 1200 * np.log2(frequencies / (440 * 2 ** ((midi-69)/12)))
             detected.append({'midi': midi, 'name': note_name(midi), 'start': round(onset, 3),
