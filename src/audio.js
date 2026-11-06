@@ -1,3 +1,13 @@
+export function signalStats(values) {
+  let squares = 0, peak = 0;
+  for (const value of values) {
+    const amplitude = Math.abs((value - 128) / 128);
+    squares += amplitude * amplitude;
+    peak = Math.max(peak, amplitude);
+  }
+  return { rms: Math.sqrt(squares / Math.max(1, values.length)), peak };
+}
+
 export function encodeWav(samples, rate) {
   const buffer = new ArrayBuffer(44 + samples.length * 2), view = new DataView(buffer);
   const text = (offset, value) => [...value].forEach((c, i) => view.setUint8(offset + i, c.charCodeAt(0)));
