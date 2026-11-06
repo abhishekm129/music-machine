@@ -1,0 +1,38 @@
+export function encodeWav(samples, rate) {
+  const buffer = new ArrayBuffer(44 + samples.length * 2), view = new DataView(buffer);
+  const text = (offset, value) => [...value].forEach((c, i) => view.setUint8(offset + i, c.charCodeAt(0)));
+  text(0, 'RIFF'); view.setUint32(4, 36 + samples.length * 2, true); text(8, 'WAVE'); text(12, 'fmt ');
+  view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true);
+  view.setUint32(24, rate, true); view.setUint32(28, rate * 2, true); view.setUint16(32, 2, true); view.setUint16(34, 16, true);
+  text(36, 'data'); view.setUint32(40, samples.length * 2, true);
+  samples.forEach((s, i) => view.setInt16(44 + i * 2, Math.max(-1, Math.min(1, s)) * 32767, true));
+  return new Blob([buffer], { type: 'audio/wav' });
+}
+
+export function demoAudio(target, bpm) {
+  const rate = 16000, beat = 60 / bpm, duration = beat * 12, samples = new Float32Array(Math.ceil(rate * duration));
+  const hz = 440 * 2 ** ((target - 69) / 12);
+  let oscillatorPhase = 0;
+  for (let i = 0; i < samples.length; i++) {
+    const t = i / rate, phase = t % beat, envelope = Math.min(1, phase / .015) * Math.max(0, Math.min(1, (beat * .76 - phase) / .05));
+    const frequency = hz * 2 ** ((8 + 5 * Math.sin(t * 7)) / 1200);
+    oscillatorPhase += 2 * Math.PI * frequency / rate;
+    samples[i] = envelope * (.32 * Math.sin(oscillatorPhase) + .06 * Math.sin(2 * oscillatorPhase));
+  }
+  return encodeWav(samples, rate);
+}
+
+export async function decodeFile(file) {
+  if (file.size > 48 * 1024 * 1024) throw new Error('Choose an audio file smaller than 48 MB.');
+  const context = new AudioContext();
+  try {
+    const audio = await context.decodeAudioData(await file.arrayBuffer());
+    if (audio.duration > 120) throw new Error('Choose a recording shorter than two minutes.');
+    const mono = new Float32Array(audio.length);
+    for (let channel = 0; channel < audio.numberOfChannels; channel++) {
+      const data = audio.getChannelData(channel);
+      for (let i = 0; i < mono.length; i++) mono[i] += data[i] / audio.numberOfChannels;
+    }
+    return encodeWav(mono, audio.sampleRate);
+  } finally { await context.close(); }
+}
