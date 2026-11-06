@@ -35,10 +35,10 @@ p { line-height: 1.65; }
 .site-header { display: flex; align-items: center; gap: 42px; min-height: 96px; margin: 0 4.4%; border-bottom: 1px solid var(--ink); }
 .wordmark { display: flex; align-items: center; gap: 12px; background: none; border: 0; padding: 8px 0; font-size: 20px; font-weight: 600; letter-spacing: -.9px; white-space: nowrap; }
 .wordmark svg { color: var(--accent); width: 27px; height: 32px; }
-.site-header nav { display: flex; align-self: stretch; gap: 30px; margin-left: 28px; }
-.site-header nav button { background: none; border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px; padding: 12px 0; font-size: 13px; color: var(--muted); }
+.site-header nav { display: flex; align-self: center; align-items: center; gap: 8px; margin-left: 28px; }
+.site-header nav button { display: inline-flex; align-items: center; min-height: 44px; background: none; border: 0; border-bottom: 2px solid transparent; margin: 0; padding: 12px 14px; font-size: 13px; color: var(--muted); white-space: nowrap; }
 .site-header nav button[aria-current] { color: var(--ink); border-bottom-color: var(--accent); background: var(--surface); }
-.site-header nav button:hover { color: var(--accent); }
+.site-header nav button:hover { color: var(--accent); background: var(--surface); }
 .site-header nav button > span { font-family: var(--mono); font-size: 10px; margin-right: 9px; color: var(--accent); }
 .site-header nav small { font: 10px var(--mono); padding: 3px 5px; border: 1px solid var(--line); margin-left: 8px; }
 .workspace-note { margin-left: auto; font-family: var(--serif); font-style: italic; font-size: 15px; color: var(--muted); }
