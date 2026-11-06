@@ -83,7 +83,7 @@ function App() {
   const metrics=result?.metrics;
   const recurring=['tuning','stability','timing'].map(kind=>({kind,count:sessions.filter(s=>kind==='tuning'?Math.abs(s.metrics.deviation)>10:kind==='stability'?s.metrics.spread>15:s.metrics.timingMs>50).length})).filter(x=>x.count>=2);
   return <div className="app-shell">
-    <aside><a className="brand" href="#" onClick={e=>{e.preventDefault();setView('studio');}}><span className="brand-mark"><Icon name="wave" size={25}/></span><span>music<span className="brand-light">machine</span><small>YOUR PRACTICE, IN TUNE.</small></span></a>
+    <aside><a className="brand" href="#" onClick={e=>{e.preventDefault();setView('studio');}}><span className="brand-mark"><Icon name="wave" size={25}/></span><span>Music <span className="brand-light">Machine</span><small>YOUR PRACTICE, IN TUNE.</small></span></a>
       <div className="nav-caption">WORKSPACE</div><nav><button className={view==='studio'?'active':''} onClick={()=>setView('studio')}><Icon name="grid"/>Practice studio<span>01</span></button><button className={view==='history'?'active':''} onClick={()=>setView('history')}><Icon name="history"/>Session history<span>{String(sessions.length).padStart(2,'0')}</span></button></nav>
       <div className="sidebar-note"><span className="tiny-star">✳</span><h3>A little better.<br/>Every session.</h3><p>Small, focused practice makes a lasting difference.</p><div className="mini-keys">{Array.from({length:12},(_,i)=><i key={i} className={[1,2,4,5,6,8,9,11].includes(i)?'black-key':''}/>)}</div></div><div className="local-status"><i/> Local workspace<small>Your audio stays on this machine.</small></div>
     </aside>
