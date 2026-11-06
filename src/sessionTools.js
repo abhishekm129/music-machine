@@ -1,6 +1,8 @@
+// Keep old single-note history separate from each distinct melody.
+const exerciseSignature = s => s.exercise?.signature || 'single';
 export function matchingSessions(sessions, anchor) {
   if (!anchor) return [];
-  return sessions.filter(s => s.target === anchor.target && s.bpm === anchor.bpm)
+  return sessions.filter(s => s.target === anchor.target && s.bpm === anchor.bpm && exerciseSignature(s) === exerciseSignature(anchor))
     .sort((a,b) => b.id - a.id);
 }
 
@@ -26,9 +28,10 @@ export function sessionsCsv(sessions) {
     return '"' + text.replaceAll('"', '""') + '"';
   };
   const rows = [['Session', 'Recorded at', 'Target MIDI', 'Tempo BPM', 'Duration seconds',
-    'Pitch accuracy', 'Timing score', 'Stability score', 'Overall score', 'Tuning cents', 'Pitch spread cents', 'Timing error ms']];
+    'Pitch accuracy', 'Timing score', 'Stability score', 'Overall score', 'Tuning cents', 'Pitch spread cents', 'Timing error ms', 'Exercise', 'Correct notes', 'Expected notes', 'Missed notes', 'Extra notes']];
   sessions.forEach(s => rows.push([s.name, s.created, s.target, s.bpm, s.duration,
     s.metrics.accuracy, s.metrics.timing, s.metrics.stability, s.metrics.overall,
-    s.metrics.deviation, s.metrics.spread, s.metrics.timingMs]));
+    s.metrics.deviation, s.metrics.spread, s.metrics.timingMs, s.exercise?.name||'Single note',
+    s.sequence?.correct, s.sequence?.total, s.sequence?.missed, s.sequence?.extras.length]));
   return '\uFEFF' + rows.map(row => row.map(cell).join(',')).join('\r\n');
 }

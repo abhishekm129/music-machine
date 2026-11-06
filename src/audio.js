@@ -32,6 +32,21 @@ export function demoAudio(target, bpm) {
   return encodeWav(samples, rate);
 }
 
+export function exerciseAudio(notes, bpm) {
+  const rate=16000, beat=60/bpm, duration=notes.reduce((t,n)=>t+n.beats*beat,0)+.4;
+  const samples=new Float32Array(Math.ceil(duration*rate));
+  let start=.2;
+  for(const note of notes){
+    const length=note.beats*beat, hz=440*2**((note.midi-69)/12);
+    for(let i=0;i<Math.floor(length*rate);i++){
+      const t=i/rate, envelope=Math.min(1,t/.015)*Math.max(0,Math.min(1,(length-.06-t)/.03));
+      samples[Math.floor(start*rate)+i]=envelope*(.32*Math.sin(2*Math.PI*hz*t)+.06*Math.sin(4*Math.PI*hz*t));
+    }
+    start+=length;
+  }
+  return encodeWav(samples,rate);
+}
+
 export async function decodeFile(file) {
   if (file.size > 48 * 1024 * 1024) throw new Error('Choose an audio file smaller than 48 MB.');
   const context = new AudioContext();

@@ -7,6 +7,7 @@ import { createServer } from 'vite';
 const server = await createServer({configFile:false,server:{middlewareMode:true,hmr:false,watch:null},appType:'custom'});
 after(()=>server.close());
 const {default:Workbench} = await server.ssrLoadModule('/src/Workbench.jsx');
+const {selectedExercise} = await server.ssrLoadModule('/src/exercises.js');
 const noop = ()=>{};
 const base = {
   view:'studio',sessions:[],target:69,bpm:100,name:'',seconds:0,level:0,
@@ -57,4 +58,21 @@ test('journal has intentional empty and filtered states',()=>{
   const html=render({view:'history',sessions:[result],progressAnchor:result,practiceGroups:[['69:100',result]],progressSessions:[result]});
   assert.ok(html.includes('No sessions under this name or note'));
   assert.ok(html.includes('Clear filters'));
+});
+test('scale controls show expected notes and the reference playback action',()=>{
+  const exercise=selectedExercise('major_scale',60,'',100);
+  const html=render({exerciseId:'major_scale',exercise});
+  assert.ok(html.includes('Hear exercise'));
+  assert.ok(html.includes('Expected exercise notes'));
+  assert.ok(html.includes('C5'));
+  assert.ok(html.includes('Root note'));
+});
+test('melody results explain missed and extra notes without crashing',()=>{
+  const phrase={...result,exercise:{name:'Custom melody'},sequence:{correct:0,total:1,
+    notes:[{index:0,expected:{name:'C4',midi:60,beats:1},expectedStart:0,actual:null,status:'missed',timingMs:null}],extras:[{name:'D4',start:.5}],detected:[]}};
+  const html=render({result:phrase,exerciseId:'custom',customMelody:'C4 D4'});
+  assert.ok(html.includes('Note-by-note exercise results'));
+  assert.ok(html.includes('Not detected'));
+  assert.ok(html.includes('Extra detected notes'));
+  assert.ok(!html.includes('null cents'));
 });

@@ -1,11 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { decodeFile, demoAudio, signalStats } from './audio';
+import { decodeFile, demoAudio, signalStats, exerciseAudio } from './audio';
 import './style.css';
 import Workbench from './Workbench';
+import { selectedExercise, practiceKey } from './exercises';
+import { PhraseChart } from './PhraseResults';
 import { filterSessions, sessionsCsv, matchingSessions, previousSession } from './sessionTools';
 
 function PitchChart({ result }) {
+  if(result?.sequence) return <PhraseChart result={result}/>;
   const points = result?.pitch || [], duration = result?.duration || 12;
   const paths = []; let path = '';
   points.forEach(p => {
@@ -36,13 +39,18 @@ function Spectrum({ result }) {
 
 export function App() {
   const [view,setView] = useState('studio'), [sessions,setSessions] = useState([]), [result,setResult] = useState(null);
-  const [target,setTarget] = useState(69), [bpm,setBpm] = useState(100), [name,setName] = useState(''), [audio,setAudio] = useState(null);
+  const [target,setTarget] = useState(60), [bpm,setBpm] = useState(100), [name,setName] = useState(''), [audio,setAudio] = useState(null);
   const [audioUrl,setAudioUrl] = useState(''), [busy,setBusy] = useState(false), [recording,setRecording] = useState(false), [seconds,setSeconds] = useState(0), [error,setError] = useState('');
   const [tab,setTab] = useState('pitch'), [metro,setMetro] = useState(false), [level,setLevel] = useState(0);
   const [activity,setActivity] = useState('Preparing audio');
   const [preparing,setPreparing] = useState(false), [signal,setSignal] = useState('quiet');
+  const [exerciseId,setExerciseId] = useState('major_scale'), [customMelody,setCustomMelody] = useState('C4 D4 E4:2 D4 C4:2');
+  const [referencePlaying,setReferencePlaying] = useState(false);
+  let exercise, exerciseError='';
+  try { exercise=selectedExercise(exerciseId,target,customMelody,Number(bpm)||100); } catch(e) { exerciseError=e.message; }
   const requestingMic = useRef(false);
   const capture = useRef(null), fileInput = useRef(null), metroContext = useRef(null), referenceContext = useRef(null);
+  useEffect(()=>{if(referenceContext.current){referenceContext.current.close();referenceContext.current=null;}setReferencePlaying(false);},[exerciseId,target,customMelody,bpm]);
   const loadSessions = async () => { const r = await fetch('/api/sessions'); if (!r.ok) throw new Error('Could not load practice history. Make sure Flask is running.'); setSessions(await r.json()); };
   useEffect(()=>{loadSessions().catch(e=>setError(e.message)); return ()=>{ const c=capture.current; if(c){clearInterval(c.timer); c.stream.getTracks().forEach(t=>t.stop()); c.context.close();} metroContext.current?.close(); referenceContext.current?.close(); };},[]);
   useEffect(()=>{ if(!audio) {setAudioUrl('');return;} const url=URL.createObjectURL(audio.blob);setAudioUrl(url);return()=>URL.revokeObjectURL(url); },[audio]);
@@ -59,12 +67,13 @@ export function App() {
     c.recorder.stop();
   };
   const startRecording = async()=>{
+    if(exerciseError){setError(exerciseError);return;}
     if(requestingMic.current || capture.current)return;
     requestingMic.current=true;setPreparing(true);
     setError('');setMetro(false);
     let stream, context;
     try{
-      if(referenceContext.current){await referenceContext.current.close();referenceContext.current=null;}
+      if(referenceContext.current){await referenceContext.current.close();referenceContext.current=null;}setReferencePlaying(false);
       if(!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder)throw new Error('Microphone recording requires a supported browser on localhost or HTTPS. You can upload a WAV file instead.');
       stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});
       const recorder=new MediaRecorder(stream); context=new AudioContext();const analyzer=context.createAnalyser();context.createMediaStreamSource(stream).connect(analyzer);analyzer.fftSize=256;
@@ -80,13 +89,27 @@ export function App() {
   const runAnalysis=async(demo=false)=>{
     setActivity('Analyzing practice');setBusy(true);setError('');setMetro(false);
     try{
-      const source=demo?{blob:demoAudio(target,bpm),name:'Demo · repeated notes'}:audio;
+      if(exerciseError)throw new Error(exerciseError);
+      if(referenceContext.current){await referenceContext.current.close();referenceContext.current=null;}setReferencePlaying(false);
+      const source=demo?{blob:exercise.notes.length?exerciseAudio(exercise.notes,bpm):demoAudio(target,bpm),name:exercise.notes.length?`${exercise.name} demo`:'Demo repeated notes'}:audio;
       if(!source)throw new Error('Record or upload audio first.');if(demo)setAudio(source);
-      const form=new FormData();form.append('audio',source.blob,'practice.wav');form.append('target',target);form.append('bpm',bpm);form.append('name',name.trim() || source.name);
+      const form=new FormData();form.append('audio',source.blob,'practice.wav');form.append('target',exerciseId==='custom'?exercise.notes[0].midi:target);form.append('bpm',bpm);form.append('name',name.trim() || (exercise.notes.length?exercise.name:source.name));form.append('exercise',JSON.stringify(exercise.spec));
       const response=await fetch('/api/analyze',{method:'POST',body:form});const data=await response.json();if(!response.ok)throw new Error(data.error || 'Analysis failed.');setResult(data);await loadSessions();
     }catch(e){setError(e.message==='Failed to fetch'?'Cannot reach the analyzer. Start Flask with python app.py.':e.message);}finally{setBusy(false);}
   };
-  const playReference=async()=>{try{referenceContext.current?.close();const context=new AudioContext();referenceContext.current=context;await context.resume();const osc=context.createOscillator(), gain=context.createGain();osc.frequency.value=440*2**((target-69)/12);gain.gain.setValueAtTime(.001,context.currentTime);gain.gain.exponentialRampToValueAtTime(.15,context.currentTime+.03);gain.gain.exponentialRampToValueAtTime(.001,context.currentTime+1.5);osc.connect(gain).connect(context.destination);osc.start();osc.stop(context.currentTime+1.6);}catch(e){setError('Could not play the reference tone: '+e.message);}};
+  const playReference=async()=>{
+    try {
+      if(referenceContext.current){await referenceContext.current.close();referenceContext.current=null;setReferencePlaying(false);return;}
+      if(exerciseError)throw new Error(exerciseError);
+      const context=new AudioContext();referenceContext.current=context;await context.resume();
+      const blob=exerciseAudio(exercise.notes.length?exercise.notes:[{midi:target,beats:2}],Number(bpm)||100);
+      const buffer=await context.decodeAudioData(await blob.arrayBuffer());
+      if(referenceContext.current!==context)return;
+      const source=context.createBufferSource(),gain=context.createGain();source.buffer=buffer;gain.gain.value=.6;source.connect(gain).connect(context.destination);
+      source.onended=()=>{if(referenceContext.current===context){setReferencePlaying(false);referenceContext.current=null;context.close();}};
+      source.start();setReferencePlaying(true);
+    }catch(e){setError(e.message);setReferencePlaying(false);if(referenceContext.current){referenceContext.current.close();referenceContext.current=null;}}
+  };
   const remove=async id=>{try{const response=await fetch(`/api/sessions/${id}`,{method:'DELETE'});if(!response.ok)throw new Error('Could not delete this session.');if(result?.id===id)setResult(null);await loadSessions();}catch(e){setError(e.message);}};
   const [search,setSearch] = useState(''), [historyTarget,setHistoryTarget] = useState(''), [sortOrder,setSortOrder] = useState('newest');
   const visibleSessions = filterSessions(sessions, search, historyTarget, sortOrder);
@@ -96,7 +119,7 @@ export function App() {
     setTimeout(()=>URL.revokeObjectURL(url), 1000);
   };
   const [progressGroup,setProgressGroup] = useState('');
-  const practiceGroups = [...new Map(sessions.map(s=>[`${s.target}:${s.bpm}`,s])).entries()];
+  const practiceGroups = [...new Map(sessions.map(s=>[practiceKey(s),s])).entries()];
   const progressAnchor = practiceGroups.find(([key])=>key===progressGroup)?.[1] || sessions[0];
   const progressSessions = matchingSessions(sessions, progressAnchor);
   const previous = result ? previousSession(sessions,result) : null;
@@ -104,7 +127,7 @@ export function App() {
   return <Workbench {...{view,setView,sessions,result,target,setTarget,bpm,setBpm,name,setName,audio,audioUrl,busy,recording,seconds,error,setError,
     tab,setTab,metro,setMetro,level,preparing,signal,fileInput,stopRecording,startRecording,upload,runAnalysis,playReference,remove,
     search,setSearch,historyTarget,setHistoryTarget,sortOrder,setSortOrder,visibleSessions,exportHistory,progressAnchor,
-    progressGroup,setProgressGroup,practiceGroups,progressSessions,previous,recurring,PitchChart,Spectrum,activity}}
+    progressGroup,setProgressGroup,practiceGroups,progressSessions,previous,recurring,PitchChart,Spectrum,activity,exerciseId,setExerciseId,customMelody,setCustomMelody,exercise,exerciseError,referencePlaying}}
     openSession={session=>{setResult(session);setView('studio');window.scrollTo({top:0,behavior:'instant'});}}/>;
 }
 if (typeof document !== 'undefined') createRoot(document.getElementById('root')).render(<App/>);
