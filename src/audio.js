@@ -1,3 +1,5 @@
+export const REFERENCE_LEAD_IN = .2;
+
 export function signalStats(values) {
   let squares = 0, peak = 0;
   for (const value of values) {
@@ -33,9 +35,9 @@ export function demoAudio(target, bpm) {
 }
 
 export function exerciseAudio(notes, bpm) {
-  const rate=16000, beat=60/bpm, duration=notes.reduce((t,n)=>t+n.beats*beat,0)+.4;
+  const rate=16000, beat=60/bpm, duration=notes.reduce((t,n)=>t+n.beats*beat,0)+REFERENCE_LEAD_IN+.2;
   const samples=new Float32Array(Math.ceil(duration*rate));
-  let start=.2;
+  let start=REFERENCE_LEAD_IN;
   for(const note of notes){
     const length=note.beats*beat, hz=440*2**((note.midi-69)/12);
     for(let i=0;i<Math.floor(length*rate);i++){

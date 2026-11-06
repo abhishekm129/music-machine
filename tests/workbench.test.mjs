@@ -67,6 +67,11 @@ test('scale controls show expected notes and the reference playback action',()=>
   assert.ok(html.includes('C5'));
   assert.ok(html.includes('Root note'));
 });
+test('reference playback identifies the synchronized metronome state',()=>{
+  const html=render({referencePlaying:true,metro:true});
+  assert.ok(html.includes('Stop reference'));
+  assert.ok(html.includes('Metronome synced'));
+});
 test('melody results explain missed and extra notes without crashing',()=>{
   const phrase={...result,exercise:{name:'Custom melody'},sequence:{correct:0,total:1,
     notes:[{index:0,expected:{name:'C4',midi:60,beats:1},expectedStart:0,actual:null,status:'missed',timingMs:null}],extras:[{name:'D4',start:.5}],detected:[]}};

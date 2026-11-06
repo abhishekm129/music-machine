@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { decodeFile, demoAudio, signalStats, exerciseAudio } from './audio';
 import './style.css';
 import Workbench from './Workbench';
+import { referenceTiming, startMetronome } from './metronome';
 import { selectedExercise, practiceKey } from './exercises';
 import { PhraseChart } from './PhraseResults';
 import { filterSessions, sessionsCsv, matchingSessions, previousSession } from './sessionTools';
@@ -49,17 +50,23 @@ export function App() {
   let exercise, exerciseError='';
   try { exercise=selectedExercise(exerciseId,target,customMelody,Number(bpm)||100); } catch(e) { exerciseError=e.message; }
   const requestingMic = useRef(false);
-  const capture = useRef(null), fileInput = useRef(null), metroContext = useRef(null), referenceContext = useRef(null);
-  useEffect(()=>{if(referenceContext.current){referenceContext.current.close();referenceContext.current=null;}setReferencePlaying(false);},[exerciseId,target,customMelody,bpm]);
+  const capture = useRef(null), fileInput = useRef(null), metroContext = useRef(null), referenceContext = useRef(null), referenceTransport = useRef(null);
+  useEffect(()=>{if(referenceContext.current){referenceContext.current.close();referenceContext.current=null;setMetro(false);}referenceTransport.current=null;setReferencePlaying(false);},[exerciseId,target,customMelody,bpm]);
   const loadSessions = async () => { const r = await fetch('/api/sessions'); if (!r.ok) throw new Error('Could not load practice history. Make sure Flask is running.'); setSessions(await r.json()); };
   useEffect(()=>{loadSessions().catch(e=>setError(e.message)); return ()=>{ const c=capture.current; if(c){clearInterval(c.timer); c.stream.getTracks().forEach(t=>t.stop()); c.context.close();} metroContext.current?.close(); referenceContext.current?.close(); };},[]);
   useEffect(()=>{ if(!audio) {setAudioUrl('');return;} const url=URL.createObjectURL(audio.blob);setAudioUrl(url);return()=>URL.revokeObjectURL(url); },[audio]);
   useEffect(()=>{
     if(!metro)return;
-    const context = new AudioContext(); metroContext.current=context;
-    const tick=()=>{const osc=context.createOscillator(), gain=context.createGain();osc.frequency.value=880;gain.gain.setValueAtTime(.1,context.currentTime);gain.gain.exponentialRampToValueAtTime(.001,context.currentTime+.06);osc.connect(gain).connect(context.destination);osc.start();osc.stop(context.currentTime+.07);};
-    tick(); const timer=setInterval(tick,60000/Math.max(40, Number(bpm)||100));return()=>{clearInterval(timer); context.close();metroContext.current=null;};
-  },[metro,bpm]);
+    const transport=referenceTransport.current;
+    if(referencePlaying){
+      if(!transport)return;
+      return startMetronome(transport.context,{bpm,startTime:transport.beatStart,endTime:transport.endTime});
+    }
+    const context=new AudioContext();metroContext.current=context;
+    const stop=startMetronome(context,{bpm,startTime:context.currentTime+.05});
+    context.resume().catch(e=>{setError(e.message);setMetro(false);});
+    return()=>{stop();if(context.state!=='closed')context.close();if(metroContext.current===context)metroContext.current=null;};
+  },[metro,bpm,referencePlaying]);
   const stopRecording = () => {
     const c=capture.current; if(!c)return; capture.current=null;clearInterval(c.timer);
     setRecording(false);setActivity('Preparing recording');setBusy(true);
@@ -73,7 +80,7 @@ export function App() {
     setError('');setMetro(false);
     let stream, context;
     try{
-      if(referenceContext.current){await referenceContext.current.close();referenceContext.current=null;}setReferencePlaying(false);
+      if(referenceContext.current){await referenceContext.current.close();referenceContext.current=null;}referenceTransport.current=null;setReferencePlaying(false);
       if(!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder)throw new Error('Microphone recording requires a supported browser on localhost or HTTPS. You can upload a WAV file instead.');
       stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});
       const recorder=new MediaRecorder(stream); context=new AudioContext();const analyzer=context.createAnalyser();context.createMediaStreamSource(stream).connect(analyzer);analyzer.fftSize=256;
@@ -90,7 +97,7 @@ export function App() {
     setActivity('Analyzing practice');setBusy(true);setError('');setMetro(false);
     try{
       if(exerciseError)throw new Error(exerciseError);
-      if(referenceContext.current){await referenceContext.current.close();referenceContext.current=null;}setReferencePlaying(false);
+      if(referenceContext.current){await referenceContext.current.close();referenceContext.current=null;}referenceTransport.current=null;setReferencePlaying(false);
       const source=demo?{blob:exercise.notes.length?exerciseAudio(exercise.notes,bpm):demoAudio(target,bpm),name:exercise.notes.length?`${exercise.name} demo`:'Demo repeated notes'}:audio;
       if(!source)throw new Error('Record or upload audio first.');if(demo)setAudio(source);
       const form=new FormData();form.append('audio',source.blob,'practice.wav');form.append('target',exerciseId==='custom'?exercise.notes[0].midi:target);form.append('bpm',bpm);form.append('name',name.trim() || (exercise.notes.length?exercise.name:source.name));form.append('exercise',JSON.stringify(exercise.spec));
@@ -98,17 +105,25 @@ export function App() {
     }catch(e){setError(e.message==='Failed to fetch'?'Cannot reach the analyzer. Start Flask with python app.py.':e.message);}finally{setBusy(false);}
   };
   const playReference=async()=>{
+    let context;
     try {
-      if(referenceContext.current){await referenceContext.current.close();referenceContext.current=null;setReferencePlaying(false);return;}
+      if(referenceContext.current){await referenceContext.current.close();referenceContext.current=null;referenceTransport.current=null;setReferencePlaying(false);setMetro(false);return;}
       if(exerciseError)throw new Error(exerciseError);
-      const context=new AudioContext();referenceContext.current=context;await context.resume();
-      const blob=exerciseAudio(exercise.notes.length?exercise.notes:[{midi:target,beats:2}],Number(bpm)||100);
-      const buffer=await context.decodeAudioData(await blob.arrayBuffer());
+      context=new AudioContext();referenceContext.current=context;await context.resume();
+      const notes=exercise.notes.length?exercise.notes:[{midi:target,beats:2}];
+      const tempo=Number(bpm)||100;
+      const buffer=await context.decodeAudioData(await exerciseAudio(notes,tempo).arrayBuffer());
       if(referenceContext.current!==context)return;
       const source=context.createBufferSource(),gain=context.createGain();source.buffer=buffer;gain.gain.value=.6;source.connect(gain).connect(context.destination);
-      source.onended=()=>{if(referenceContext.current===context){setReferencePlaying(false);referenceContext.current=null;context.close();}};
-      source.start();setReferencePlaying(true);
-    }catch(e){setError(e.message);setReferencePlaying(false);if(referenceContext.current){referenceContext.current.close();referenceContext.current=null;}}
+      const timing=referenceTiming(notes,tempo,context.currentTime);
+      referenceTransport.current={context,...timing};
+      source.onended=()=>{if(referenceContext.current===context){setReferencePlaying(false);setMetro(false);referenceContext.current=null;referenceTransport.current=null;context.close();}};
+      source.start(timing.sourceStart);setReferencePlaying(true);
+    }catch(e){
+      if(context&&referenceContext.current!==context)return;
+      setError(e.message);setReferencePlaying(false);setMetro(false);
+      if(referenceContext.current){referenceContext.current.close();referenceContext.current=null;referenceTransport.current=null;}
+    }
   };
   const remove=async id=>{try{const response=await fetch(`/api/sessions/${id}`,{method:'DELETE'});if(!response.ok)throw new Error('Could not delete this session.');if(result?.id===id)setResult(null);await loadSessions();}catch(e){setError(e.message);}};
   const [search,setSearch] = useState(''), [historyTarget,setHistoryTarget] = useState(''), [sortOrder,setSortOrder] = useState('newest');
