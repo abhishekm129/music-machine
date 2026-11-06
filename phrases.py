@@ -89,7 +89,7 @@ def segment_notes(points, onsets):
     return detected
 
 
-def align_notes(expected, detected, beat):
+def align_notes(expected, detected, beat, pitch_class=False):
     n, m = len(expected), len(detected)
     costs = np.zeros((n+1, m+1))
     costs[:, 0], costs[0, :] = np.arange(n+1), np.arange(m+1)
@@ -97,7 +97,8 @@ def align_notes(expected, detected, beat):
     for i in range(1, n+1):
         for j in range(1, m+1):
             a, b = expected[i-1], detected[j-1]
-            pitch_cost = 0 if a['midi'] == b['midi'] else 1.25
+            difference = a['midi'] - b['midi']
+            pitch_cost = 0 if (difference % 12 == 0 if pitch_class else difference == 0) else 1.25
             duration_cost = min(.2, abs(b['duration'] / beat - a['beats']) * .08)
             choices = [costs[i-1, j-1] + pitch_cost + duration_cost, costs[i-1, j] + 1, costs[i, j-1] + 1]
             action = int(np.argmin(choices))
@@ -115,6 +116,19 @@ def align_notes(expected, detected, beat):
     return list(reversed(pairs)), list(reversed(extras))
 
 
+def register_mismatch(expected, detected, beat):
+    pairs, extras = align_notes(expected, detected, beat, pitch_class=True)
+    differences = [detected[j]['midi']-expected[i]['midi'] for i,j in pairs if j is not None]
+    for shift in (-12,12,-24,24):
+        count = differences.count(shift)
+        if count >= 4 and count/max(len(expected),len(detected)) >= .75:
+            direction = 'lower' if shift < 0 else 'higher'
+            amount = 'one octave' if abs(shift)==12 else 'two octaves'
+            return {'semitones':shift, 'message':f'The detected phrase follows the exercise {amount} {direction}. '
+                    'Compare your starting note with the reference. This can reflect your sung register or ambiguity in the recorded voice; the app has not shifted your notes.'}, pairs, extras
+    return None, None, None
+
+
 def evaluate_phrase(result, points, exercise, bpm):
     detected = segment_notes(points, result['onsets'])
     if not detected:
@@ -122,6 +136,11 @@ def evaluate_phrase(result, points, exercise, bpm):
     expected = exercise['notes']
     beat = 60 / bpm
     pairs, extras = align_notes(expected, detected, beat)
+    register_hint, register_pairs, register_extras = register_mismatch(expected, detected, beat)
+    if register_hint:
+        # Align the contour for a useful display, while still scoring its true
+        # detected MIDI pitches as wrong. Never transpose to inflate accuracy.
+        pairs, extras = register_pairs, register_extras
     starts, position = [], 0
     for n in expected:
         starts.append(position * beat)
@@ -156,6 +175,8 @@ def evaluate_phrase(result, points, exercise, bpm):
     result['sequence'] = {'notes': rows, 'detected': detected, 'extras': [detected[j] for j in extras],
                           'correct': correct, 'total': len(expected), 'offset': round(offset,3),
                           'missed': sum(r['status']=='missed' for r in rows), 'wrong': sum(r['status']=='wrong' for r in rows)}
+    if register_hint:
+        result['sequence']['registerHint'] = register_hint
     result['feedback'] = [
         {'kind':'tuning','title':f'{correct} of {len(expected)} expected notes found',
          'detail':f"{result['sequence']['wrong']} wrong notes, {result['sequence']['missed']} missed notes, {len(extras)} extra notes. Review the note-by-note results before repeating the phrase."},
@@ -163,4 +184,6 @@ def evaluate_phrase(result, points, exercise, bpm):
          'detail':f'Within-note pitch variation was {stability:.1f} cents. Intended changes between notes do not count as instability.'},
         {'kind':'timing','title':'Listen to the space between notes',
          'detail':f'Note starts averaged {timing_ms:.0f} ms from the exercise, relative to your first matched note.' if timing_ms is not None else 'Not enough matched notes for a timing comparison. Try the complete exercise at a slower tempo.'}]
+    if register_hint:
+        result['feedback'][0] = {'kind':'tuning','title':'Check the starting octave','detail':register_hint['message']}
     return result

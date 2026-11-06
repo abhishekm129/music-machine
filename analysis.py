@@ -2,6 +2,7 @@
 import io
 import wave
 import numpy as np
+from pitch import fundamental
 
 
 def read_wav(data):
@@ -42,30 +43,14 @@ def analyze(samples, rate, target=69, bpm=100, exercise=None):
     threshold = max(.008, float(energies.max()) * .12)
     target_hz = 440 * 2 ** ((target - 69) / 12)
     points, pitches, deviations = [], [], []
-    low, high = int(rate / 1200), int(rate / 65)
     for i, frame in enumerate(frames):
         frequency, cents = None, None
         if energies[i] >= threshold:
-            centered = frame - frame.mean()
-            fft = np.fft.rfft(centered, n=size * 2)
-            corr = np.fft.irfft(fft * fft.conj())[:size]
-            # Normalize for the decreasing overlap at larger lags.
-            squares = np.concatenate(([0.], np.cumsum(centered ** 2)))
-            lags = np.arange(low, high + 1)
-            denom = np.sqrt((squares[size - lags]) * (squares[size] - squares[lags]))
-            scores = corr[lags] / np.maximum(denom, 1e-12)
-            candidates = np.where((scores[1:-1] > scores[:-2]) & (scores[1:-1] >= scores[2:]))[0] + 1
-            if len(candidates):
-                best_score = float(scores[candidates].max())
-                good = candidates[scores[candidates] >= max(.82, best_score - .035)]
-                if len(good):
-                    lag = int(lags[good[0]])
-                    a, b, c = corr[lag - 1:lag + 2]
-                    shift = .5 * (a - c) / (a - 2 * b + c) if abs(a - 2 * b + c) > 1e-12 else 0
-                    frequency = float(rate / (lag + np.clip(shift, -.5, .5)))
-                    cents = float(1200 * np.log2(frequency / target_hz))
-                    pitches.append(frequency)
-                    deviations.append(cents)
+            frequency = fundamental(frame, rate)
+            if frequency is not None:
+                cents = float(1200 * np.log2(frequency / target_hz))
+                pitches.append(frequency)
+                deviations.append(cents)
         points.append({'time': round(i * hop / rate, 3), 'hz': round(frequency, 2) if frequency else None,
                        'cents': round(cents, 1) if cents is not None else None,
                        'level': round(float(energies[i]), 4)})
@@ -74,7 +59,10 @@ def analyze(samples, rate, target=69, bpm=100, exercise=None):
     # Energy rises identify attacks. Suppress adjacent detections for 140 ms.
     onset_hop = 160
     short = samples[:len(samples) // onset_hop * onset_hop].reshape(-1, onset_hop)
-    envelope = np.sqrt(np.mean(short ** 2, axis=1))
+    # Average 50 ms of power before detecting attacks. Ten-millisecond RMS
+    # fluctuations in a low singing voice otherwise resemble repeated attacks.
+    power = np.mean(short ** 2, axis=1)
+    envelope = np.sqrt(np.convolve(power, np.ones(5)/5, mode='same'))
     rises = np.diff(envelope, prepend=0)
     candidates = np.where((rises > max(.005, envelope.max() * .13)) & (envelope >= threshold))[0]
     onsets = []
@@ -111,7 +99,7 @@ def analyze(samples, rate, target=69, bpm=100, exercise=None):
                'medianHz': round(float(np.median(pitches)), 2), 'deviation': round(median, 1),
                'spread': round(stability, 1), 'timingMs': timing_ms, 'voicedPercent': round(100 * len(pitches) / len(frames)),
                'overall': round(np.mean([accuracy, stable_score] + ([timing_score] if timing_score is not None else [])))}
-    result = {'metrics': metrics, 'pitch': points[::max(1, len(points) // 600)], 'onsets': onsets,
+    result = {'analysisVersion': 'yin-1', 'metrics': metrics, 'pitch': points[::max(1, len(points) // 600)], 'onsets': onsets,
             'spectrum': [{'hz': round(float(hz), 1), 'db': round(float(value), 1)} for hz, value in zip(frequencies, db)],
             'feedback': feedback, 'duration': round(len(samples) / rate, 2)}
     if exercise:
