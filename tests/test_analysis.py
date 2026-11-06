@@ -24,6 +24,25 @@ def wav_bytes(samples):
 
 
 class AnalysisTests(unittest.TestCase):
+    def test_frontend_asset_content_types(self):
+        original_folder = app.static_folder
+        try:
+            with tempfile.TemporaryDirectory() as folder:
+                app.static_folder = folder
+                assets = Path(folder) / 'assets'
+                assets.mkdir()
+                (assets / 'app.js').write_text('export const ready = true;')
+                (assets / 'app.css').write_text('body { margin: 0; }')
+                with app.test_client() as client:
+                    with client.get('/assets/app.js') as response:
+                        self.assertEqual(response.status_code, 200)
+                        self.assertEqual(response.mimetype, 'application/javascript')
+                    with client.get('/assets/app.css') as response:
+                        self.assertEqual(response.status_code, 200)
+                        self.assertEqual(response.mimetype, 'text/css')
+        finally:
+            app.static_folder = original_folder
+
     def test_reference_pitch(self):
         result = analyze(tone(), 16000)
         self.assertAlmostEqual(result['metrics']['medianHz'], 440, delta=2)

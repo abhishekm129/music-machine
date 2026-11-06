@@ -1,4 +1,5 @@
 import json
+import mimetypes
 import sqlite3
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -6,6 +7,11 @@ from pathlib import Path
 from flask import Flask, jsonify, request, send_from_directory
 from werkzeug.exceptions import RequestEntityTooLarge
 from analysis import analyze, read_wav
+
+# Windows registry MIME mappings can identify .js as text/plain. Module scripts
+# require a JavaScript MIME type regardless of the host's registry settings.
+mimetypes.add_type('application/javascript', '.js')
+mimetypes.add_type('text/css', '.css')
 
 app = Flask(__name__, static_folder='dist')
 app.config.update(MAX_CONTENT_LENGTH=48 * 1024 * 1024, DATABASE=Path(__file__).with_name('practice.db'))
