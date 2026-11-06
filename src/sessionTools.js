@@ -2,7 +2,7 @@
 const exerciseSignature = s => s.exercise?.signature || 'single';
 export function matchingSessions(sessions, anchor) {
   if (!anchor) return [];
-  return sessions.filter(s => s.target === anchor.target && s.bpm === anchor.bpm && exerciseSignature(s) === exerciseSignature(anchor))
+  return sessions.filter(s => s.target === anchor.target && s.bpm === anchor.bpm && exerciseSignature(s) === exerciseSignature(anchor) && (s.analysisVersion||'legacy') === (anchor.analysisVersion||'legacy'))
     .sort((a,b) => b.id - a.id);
 }
 

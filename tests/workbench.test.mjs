@@ -90,3 +90,12 @@ test('melody results explain missed and extra notes without crashing',()=>{
   assert.ok(html.includes('Extra detected notes'));
   assert.ok(!html.includes('null cents'));
 });
+test('octave hints explain a register difference without hiding the measured score',()=>{
+  const phrase={...result,analysisVersion:'yin-1',metrics:{...result.metrics,accuracy:0},sequence:{correct:0,total:0,notes:[],extras:[],detected:[],registerHint:{message:'The detected phrase follows the exercise one octave lower.'}}};
+  const html=render({result:phrase,target:55,audioUrl:'blob:test-take'});
+  assert.ok(html.includes('Check the octave.'));
+  assert.ok(html.includes('one octave lower'));
+  assert.ok(html.includes('196.00'));
+  assert.ok(html.includes('download="music-machine-take.wav"'));
+  assert.ok(html.includes('class="score-value">0'));
+});

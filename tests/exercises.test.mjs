@@ -19,4 +19,7 @@ test('history keeps distinct exercises apart while preserving legacy sessions',(
   assert.notEqual(practiceKey(old),practiceKey(scale));
   assert.deepEqual(matchingSessions([old,scale],scale).map(s=>s.id),[2]);
   assert.ok(sessionsCsv([scale]).includes('Major scale'));
+  const updated={...scale,id:3,analysisVersion:'yin-1'};
+  assert.notEqual(practiceKey(updated),practiceKey(scale));
+  assert.deepEqual(matchingSessions([old,scale,updated],updated).map(s=>s.id),[3]);
 });

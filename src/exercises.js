@@ -27,5 +27,5 @@ export function selectedExercise(id, root, custom, bpm) {
   return {spec:id==='custom'?{id,notes:notes.map(({midi,beats})=>({midi,beats}))}:{id},notes,name:preset?.name||'Custom melody'};
 }
 
-export const practiceKey = session => `${session.target}:${session.bpm}:${session.exercise?.signature||'single'}`;
+export const practiceKey = session => `${session.target}:${session.bpm}:${session.exercise?.signature||'single'}:${session.analysisVersion||'legacy'}`;
 export const practiceLabel = session => session.exercise?.name || 'Single note';
