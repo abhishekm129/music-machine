@@ -7,6 +7,7 @@ from pathlib import Path
 from flask import Flask, jsonify, request, send_from_directory
 from werkzeug.exceptions import RequestEntityTooLarge
 from analysis import analyze, read_wav
+from phrases import build_exercise
 
 # Windows registry MIME mappings can identify .js as text/plain. Module scripts
 # require a JavaScript MIME type regardless of the host's registry settings.
@@ -53,8 +54,13 @@ def analyze_recording():
         recording = request.files.get('audio')
         if recording is None:
             raise ValueError('Choose a WAV file or make a recording first.')
+        try:
+            spec = json.loads(request.form.get('exercise', '{"id":"single"}'))
+        except (json.JSONDecodeError, TypeError) as exc:
+            raise ValueError('The exercise could not be read. Select it again.') from exc
+        exercise = build_exercise(spec, target, bpm)
         samples, rate = read_wav(recording.read())
-        result = analyze(samples, rate, target, bpm)
+        result = analyze(samples, rate, target, bpm, exercise)
         name = str(request.form.get('name') or 'Practice session').strip()[:100] or 'Practice session'
         created = datetime.now(timezone.utc).isoformat()
         with database() as db:

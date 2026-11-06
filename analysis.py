@@ -29,7 +29,7 @@ def read_wav(data):
     return samples, rate
 
 
-def analyze(samples, rate, target=69, bpm=100):
+def analyze(samples, rate, target=69, bpm=100, exercise=None):
     # Resample through interpolation to keep analysis cost independent of input rate.
     working_rate = 16000
     samples = np.interp(np.arange(0, len(samples), rate / working_rate), np.arange(len(samples)), samples)
@@ -111,6 +111,10 @@ def analyze(samples, rate, target=69, bpm=100):
                'medianHz': round(float(np.median(pitches)), 2), 'deviation': round(median, 1),
                'spread': round(stability, 1), 'timingMs': timing_ms, 'voicedPercent': round(100 * len(pitches) / len(frames)),
                'overall': round(np.mean([accuracy, stable_score] + ([timing_score] if timing_score is not None else [])))}
-    return {'metrics': metrics, 'pitch': points[::max(1, len(points) // 600)], 'onsets': onsets,
+    result = {'metrics': metrics, 'pitch': points[::max(1, len(points) // 600)], 'onsets': onsets,
             'spectrum': [{'hz': round(float(hz), 1), 'db': round(float(value), 1)} for hz, value in zip(frequencies, db)],
             'feedback': feedback, 'duration': round(len(samples) / rate, 2)}
+    if exercise:
+        from phrases import evaluate_phrase
+        return evaluate_phrase(result, points, exercise, bpm)
+    return result
