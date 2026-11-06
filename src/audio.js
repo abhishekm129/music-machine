@@ -1,5 +1,15 @@
 export const REFERENCE_LEAD_IN = .2;
 
+export function createMicrophoneCapture(stream, context, Recorder=globalThis.MediaRecorder) {
+  // Record the original microphone stream only. Playback oscillators and
+  // reference buffers are never connected to a recording destination.
+  const recorder = new Recorder(stream);
+  const analyzer = context.createAnalyser();
+  context.createMediaStreamSource(stream).connect(analyzer);
+  analyzer.fftSize = 256;
+  return {recorder, analyzer};
+}
+
 export function signalStats(values) {
   let squares = 0, peak = 0;
   for (const value of values) {

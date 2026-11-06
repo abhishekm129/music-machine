@@ -37,7 +37,9 @@ Open http://127.0.0.1:5173. Choose an exercise and tempo, then record with a mic
 
 Single-note mode remains available for sustained tones or repeated notes at one pitch.
 
-During recording, level guidance helps you avoid a weak or clipped signal. The reference tone and metronome stop before microphone recording begins; use headphones when practicing with external reference audio.
+During recording, level guidance helps you avoid a weak or clipped signal. The reference exercise stops when recording begins. The metronome can keep playing, and you can switch it on or off during recording without changing the tempo. It stops when the recording ends.
+
+Use headphones when recording with the metronome. The app records only the original microphone stream: clicks and reference playback are never digitally mixed into it. However, speakers can physically leak into a microphone, so speaker clicks cannot be guaranteed absent from analysis. No frequency filtering is applied to remove clicks, because this could also remove part of your instrument's tone.
 
 Session history includes name search, root-note filtering, date/score sorting, and CSV export of the displayed sessions. The app loads the most recent 100 sessions. Audio is not included in exports. Progress charts compare only identical exercise notes and durations at the same root and tempo. Old single-note sessions remain separate from scales and melodies. CSV summaries include exercise names and note counts. A missing timing measurement is never treated as zero.
 

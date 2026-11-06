@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { decodeFile, demoAudio, signalStats, exerciseAudio } from './audio';
+import { decodeFile, demoAudio, signalStats, exerciseAudio, createMicrophoneCapture } from './audio';
 import './style.css';
 import Workbench from './Workbench';
 import { referenceTiming, startMetronome } from './metronome';
@@ -69,7 +69,7 @@ export function App() {
   },[metro,bpm,referencePlaying]);
   const stopRecording = () => {
     const c=capture.current; if(!c)return; capture.current=null;clearInterval(c.timer);
-    setRecording(false);setActivity('Preparing recording');setBusy(true);
+    setMetro(false);setRecording(false);setActivity('Preparing recording');setBusy(true);
     c.recorder.onstop=async()=>{try{const blob=await decodeFile(new Blob(c.chunks,{type:c.recorder.mimeType}));setAudio({blob,name:'Microphone recording'});}catch(e){setError(e.message);}finally{c.stream.getTracks().forEach(t=>t.stop());c.context.close();setBusy(false);setLevel(0);}};
     c.recorder.stop();
   };
@@ -77,13 +77,15 @@ export function App() {
     if(exerciseError){setError(exerciseError);return;}
     if(requestingMic.current || capture.current)return;
     requestingMic.current=true;setPreparing(true);
-    setError('');setMetro(false);
+    setError('');
     let stream, context;
     try{
-      if(referenceContext.current){await referenceContext.current.close();referenceContext.current=null;}referenceTransport.current=null;setReferencePlaying(false);
+      const reference=referenceContext.current;
+      referenceContext.current=null;referenceTransport.current=null;setReferencePlaying(false);
+      if(reference)await reference.close();
       if(!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder)throw new Error('Microphone recording requires a supported browser on localhost or HTTPS. You can upload a WAV file instead.');
       stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});
-      const recorder=new MediaRecorder(stream); context=new AudioContext();const analyzer=context.createAnalyser();context.createMediaStreamSource(stream).connect(analyzer);analyzer.fftSize=256;
+      context=new AudioContext();const {recorder,analyzer}=createMicrophoneCapture(stream,context);
       await context.resume();
       const c={stream,context,recorder,chunks:[],started:performance.now()};capture.current=c;recorder.ondataavailable=e=>{if(e.data.size)c.chunks.push(e.data);};recorder.start();setRecording(true);setSeconds(0);setAudio(null);setSignal('quiet');
       recorder.onerror=()=>{setError('Recording was interrupted. Please try again.');if(capture.current)stopRecording();};

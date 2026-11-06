@@ -72,6 +72,15 @@ test('reference playback identifies the synchronized metronome state',()=>{
   assert.ok(html.includes('Stop reference'));
   assert.ok(html.includes('Metronome synced'));
 });
+test('recording keeps the metronome usable while reference and tempo stay locked',()=>{
+  const html=render({recording:true,metro:true});
+  const metronome=html.match(/<button[^>]*aria-describedby="metronome-routing"[^>]*>/)?.[0];
+  assert.ok(metronome);
+  assert.ok(!metronome.includes('disabled'));
+  assert.ok(metronome.includes('aria-pressed="true"'));
+  assert.match(html, /<input aria-label="Tempo in beats per minute"[^>]*disabled/);
+  assert.ok(html.includes('Use headphones while recording'));
+});
 test('melody results explain missed and extra notes without crashing',()=>{
   const phrase={...result,exercise:{name:'Custom melody'},sequence:{correct:0,total:1,
     notes:[{index:0,expected:{name:'C4',midi:60,beats:1},expectedStart:0,actual:null,status:'missed',timingMs:null}],extras:[{name:'D4',start:.5}],detected:[]}};
